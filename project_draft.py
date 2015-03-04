@@ -286,6 +286,10 @@ Logistic Regression
 ===================
 Another check to make sure we're not getting too fancy for no useful reason
 
+SVM
+===
+Alternative classification approach for basic data; unlikely to work for graphical data due to having more features than observations
+
 '''
 # this will be the part where I instantiate a few models in sklearn
 # and then train them on the EARLIER 70% (say) of the dataset
@@ -443,6 +447,23 @@ for i in range(len(LR_Scores)):
     '\t' + str(LR_Scores[i] - list(y_basic.mean())[i])
 
 # this blows even random forest out of the water on the basic data - interesting
+
+#####################
+# SVM on basic data #
+#####################
+SVM_Scores = list(np.zeros(y_basic.shape[1]))
+
+for i in range(y_basic.shape[1]):
+    from sklearn.svm import SVC
+    svc = SVC()
+    svc.fit(Xb_train, yb_train.iloc[:,i])
+    SVM_Scores[i] = svc.score(Xb_test, yb_test.iloc[:,i])
+
+# compare to null accuracy rates; difference in accuracy:
+for i in range(len(SVM_Scores)):
+    print str(list(y_basic.mean())[i]) + '\t' + str(SVM_Scores[i]) + \
+    '\t' + str(SVM_Scores[i] - list(y_basic.mean())[i])
+
 
 ## COMPARISON NOTES VS COMPLEX DATA
 
