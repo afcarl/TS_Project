@@ -324,7 +324,7 @@ null_rates = y.mean().to_dict()
 Plan B
 ======
 
-Alternative, more basic dataset (not using graphically-generated parameters), that can be used either in lieu of or as a basis for comparison to the more complex data.
+Alternative, more basic dataset (not using graphically-generated parameters), that can be used either in lieu of or as a basis of comparison for the more complex data.
 
 '''
 # generate a few additional basic features from clean data
@@ -342,18 +342,107 @@ RMIN_CLOSE = pd.rolling_min(clean.CLOSE, slice_length)
 RMAX_CLOSE = pd.rolling_max(clean.CLOSE, slice_length)
 
 # (high - low)^2 for each observation (vol measure of prices quoted within that minute)
-HL_SQD = Series([(clean.iloc[row][1] - clean.iloc[row][2]) ** 2 for row in range(len(clean))])
+HL_SQD = Series([(clean.iloc[row][1] - clean.iloc[row][2]) ** 2 for row in range(len(clean))], index=clean.index)
 
-# inner join of the above-created Series on the "clean" DF
-X_basic = clean.join([RM_CLOSE, RSTD_CLOSE, RMIN_CLOSE, RMAX_CLOSE, HL_SQD], how=inner)
+## Add others if I think of something clever
 
-# AdaBoost on basic data
+# inner join of the above-created Series on the "clean" DF; drop rows with NaN values
+X_basic = clean.join([RM_CLOSE, RSTD_CLOSE, RMIN_CLOSE, RMAX_CLOSE, HL_SQD], how='inner')
+X_basic = X_basic.dropna()
 
-# Random Forest on basic data
+# create y_basic based on this new dataframe
+ahead_basic = []
 
-# Naive Bayes on basic data
+for i in range(len(X_basic) - max(mins_ahead)):
+    current_row = [1 if X_basic.iloc[i+mins_ahead[j],0] > clean.iloc[i,0] else 0 for j in range(len(mins_ahead))]
+    ahead_basic.append(current_row)
 
-# Logistic Regression on basic data
+y_basic = DataFrame(ahead_basic, columns = [str(mins_ahead[i]) + '_ahead' for i in range(len(mins_ahead))])
+
+# trim down X_basic to match y_basic's reduced length
+X_basic = X_basic[:-60]
+
+# create Train and Test sets MANUALLY
+# cannot use randomization, else cheating by "looking into the future"
+# define 70% cutoff point manually
+train_inds = int((0.7 * len(X_basic))//1)
+
+Xb_train = X_basic.iloc[:train_inds, :]
+yb_train = y_basic.iloc[:train_inds, :]
+Xb_test = X_basic.iloc[train_inds:, :]
+yb_test = y_basic.iloc[train_inds:, :]
+
+# null accuracy rates for basic dataset (dict may not be great for this)
+null_rates_basic = y_basic.mean().to_dict()
+
+##########################
+# AdaBoost on basic data #
+##########################
+ADB_Scores = list(np.zeros(y_basic.shape[1]))
+
+for i in range(y_basic.shape[1]):
+    from sklearn.ensemble import AdaBoostClassifier
+    adb = AdaBoostClassifier(n_estimators = 100)
+    adb.fit(Xb_train, yb_train.iloc[:,i])
+    ADB_Scores[i] = adb.score(Xb_test, yb_test.iloc[:,i])
+
+# compare to null accuracy rates; difference in accuracy:
+for i in range(len(ADB_Scores)):
+    print str(list(y_basic.mean())[i]) + '\t' + str(ADB_Scores[i]) + \
+    '\t' + str(ADB_Scores[i] - list(y_basic.mean())[i])
+
+###############################
+# Random Forest on basic data #
+###############################
+RF_Scores = list(np.zeros(y_basic.shape[1]))
+
+for i in range(y_basic.shape[1]):
+    from sklearn.ensemble import RandomForestClassifier
+    rf = RandomForestClassifier(n_estimators = 20)
+    rf.fit(Xb_train, yb_train.iloc[:,i])
+    RF_Scores[i] = rf.score(Xb_test, yb_test.iloc[:,i])
+
+# compare to null accuracy rates; difference in accuracy:
+for i in range(len(RF_Scores)):
+    print str(list(y_basic.mean())[i]) + '\t' + str(RF_Scores[i]) + \
+    '\t' + str(RF_Scores[i] - list(y_basic.mean())[i])
+
+#############################
+# Naive Bayes on basic data #
+#############################
+NB_Scores = list(np.zeros(y_basic.shape[1]))
+
+for i in range(y_basic.shape[1]):
+    from sklearn.naive_bayes import GaussianNB
+    nb = GaussianNB()
+    nb.fit(Xb_train, yb_train.iloc[:,i])
+    NB_Scores[i] = nb.score(Xb_test, yb_test.iloc[:,i])
+
+# compare to null accuracy rates; difference in accuracy:
+for i in range(len(NB_Scores)):
+    print str(list(y_basic.mean())[i]) + '\t' + str(NB_Scores[i]) + \
+    '\t' + str(NB_Scores[i] - list(y_basic.mean())[i])
+
+# this performs SUPER poorly, but that's not particularly surprising on these data
+# may do significantly better on pixel data, but still, not a very promising model
+
+#####################################
+# Logistic Regression on basic data #
+#####################################
+LR_Scores = list(np.zeros(y_basic.shape[1]))
+
+for i in range(y_basic.shape[1]):
+    from sklearn.linear_model import LogisticRegression
+    lr = LogisticRegression()
+    lr.fit(Xb_train, yb_train.iloc[:,i])
+    LR_Scores[i] = lr.score(Xb_test, yb_test.iloc[:,i])
+
+# compare to null accuracy rates; difference in accuracy:
+for i in range(len(LR_Scores)):
+    print str(list(y_basic.mean())[i]) + '\t' + str(LR_Scores[i]) + \
+    '\t' + str(LR_Scores[i] - list(y_basic.mean())[i])
+
+# this blows even random forest out of the water on the basic data - interesting
 
 ## COMPARISON NOTES VS COMPLEX DATA
 
