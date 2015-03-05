@@ -130,18 +130,14 @@ https://www.dropbox.com/s/2m5pp7gtev36jrd/gdata_pickle?dl=0
 
 # create a dict to reverse the pixel values captured in an image so that grayscale
 # actually produces sparsity instead of a bunch of 255 values
-
 rng = np.arange(256)
 revd = rng[::-1]
 px_dict = dict(zip(rng,revd))
 
 # mapping function to remap pixel values using the above-created dict
-
 def dict_map(item):
     global px_dict
     return px_dict[item]
-
-# main image processing loop:
 
 '''
 TODO:
@@ -181,6 +177,7 @@ days = 1
 # instantiate DTI for the graph data (to join on clean)
 graph_dti = pd.DatetimeIndex()
 
+# main image processing loop:
 for i in range(len(raw_data) - slice_length):
     # plot the length of the time slice
         # various matplotlib code goes here -- NB no need to actually plot the figure onscreen
@@ -215,7 +212,6 @@ Things to try to improve this loop:
 '''
 
 # pickling so that I don't have to run this again:
-
 gdata = DataFrame(graph_data)
 gdata.to_pickle('data/gdata_pickle')
 # reading pickle appears to be very slow for some reason
@@ -261,8 +257,7 @@ y = DataFrame(ahead, columns = [str(mins_ahead[i]) + '_ahead' for i in range(len
 TODO:
 - think about something cleverer than a binary target (maybe 4-5 classes?)
 - try to train an actual classifier (logreg, rf, nb, adaboost)
-- MAKE SURE TO CHECK AGAINST NULL ACCURACY RATE
-- compare some cross-cutting metric for different classifiers (AUC, F-1 score, etc.)
+- compare some cross-cutting metric for different classifiers (AUC, F-1 score, etc.) [does sklearn "Score" do this automatically?]
 '''
 
 
@@ -293,10 +288,11 @@ Alternative classification approach for basic data; unlikely to work for graphic
 '''
 # this will be the part where I instantiate a few models in sklearn
 # and then train them on the EARLIER 70% (say) of the dataset
+# cannot use regular train_test_split / CV because then the algos would be "cheating"
+# by having some future data in the training mix, even if it didn't know it was future data
 
-# cannot use regular train_test_split because then the algos would be "cheating"
-# by having some future data in the training mix, even if it didn't know it was
-# future data
+## Null Accuracy Rates for comparison:
+null_rates = list(y.mean())
 
 # AdaBoost
 
@@ -309,43 +305,18 @@ Alternative classification approach for basic data; unlikely to work for graphic
 ## COMPARISON TO EACH OTHER
 
 '''
-TODO:
-
-Build X_basic dataframe of more basic data to train on.  Include things like:
-
-- rolling average
-- rolling std (volatility metric)
-- prior window max / min
-
-Redo classification models to see if the simpler data performs better/worse/no different
-'''
-
-## Null Accuracy Rates for comparison:
-
-null_rates = y.mean().to_dict()
-
-'''
 Plan B
 ======
 
 Alternative, more basic dataset (not using graphically-generated parameters), that can be used either in lieu of or as a basis of comparison for the more complex data.
 
 '''
-# generate a few additional basic features from clean data
-
-# rolling mean of close
+# generate a few additional basic features from clean data:
+# rolling mean, std, min, max of close, and (high-low) ^2 for each observation
 RM_CLOSE = pd.rolling_mean(clean.CLOSE, slice_length)
-
-# rolling standard deviation of close
 RSTD_CLOSE = pd.rolling_std(clean.CLOSE, slice_length)
-
-# rolling min of close
 RMIN_CLOSE = pd.rolling_min(clean.CLOSE, slice_length)
-
-# rolling max of close
 RMAX_CLOSE = pd.rolling_max(clean.CLOSE, slice_length)
-
-# (high - low)^2 for each observation (vol measure of prices quoted within that minute)
 HL_SQD = Series([(clean.iloc[row][1] - clean.iloc[row][2]) ** 2 for row in range(len(clean))], index=clean.index)
 
 ## Add others if I think of something clever
@@ -368,16 +339,19 @@ X_basic = X_basic[:-60]
 
 # create Train and Test sets MANUALLY
 # cannot use randomization, else cheating by "looking into the future"
+# however, CAN use pd.rolling_apply or similar to create "rolling" CV folds -- look into this
+
 # define 70% cutoff point manually
 train_inds = int((0.7 * len(X_basic))//1)
 
+#split into train / test sets
 Xb_train = X_basic.iloc[:train_inds, :]
 yb_train = y_basic.iloc[:train_inds, :]
 Xb_test = X_basic.iloc[train_inds:, :]
 yb_test = y_basic.iloc[train_inds:, :]
 
 # null accuracy rates for basic dataset (dict may not be great for this)
-null_rates_basic = y_basic.mean().to_dict()
+null_rates_basic = list(y_basic.mean())
 
 ##########################
 # AdaBoost on basic data #
@@ -393,7 +367,7 @@ for i in range(y_basic.shape[1]):
 # compare to null accuracy rates; difference in accuracy:
 for i in range(len(ADB_Scores)):
     print str(list(y_basic.mean())[i]) + '\t' + str(ADB_Scores[i]) + \
-    '\t' + str(ADB_Scores[i] - list(y_basic.mean())[i])
+    '\t' + str(ADB_Scores[i] - null_rates_basic[i])
 
 ###############################
 # Random Forest on basic data #
@@ -409,7 +383,7 @@ for i in range(y_basic.shape[1]):
 # compare to null accuracy rates; difference in accuracy:
 for i in range(len(RF_Scores)):
     print str(list(y_basic.mean())[i]) + '\t' + str(RF_Scores[i]) + \
-    '\t' + str(RF_Scores[i] - list(y_basic.mean())[i])
+    '\t' + str(RF_Scores[i] - null_rates_basic[i])
 
 #############################
 # Naive Bayes on basic data #
@@ -425,7 +399,7 @@ for i in range(y_basic.shape[1]):
 # compare to null accuracy rates; difference in accuracy:
 for i in range(len(NB_Scores)):
     print str(list(y_basic.mean())[i]) + '\t' + str(NB_Scores[i]) + \
-    '\t' + str(NB_Scores[i] - list(y_basic.mean())[i])
+    '\t' + str(NB_Scores[i] - null_rates_basic[i])
 
 # this performs SUPER poorly, but that's not particularly surprising on these data
 # may do significantly better on pixel data, but still, not a very promising model
@@ -444,7 +418,7 @@ for i in range(y_basic.shape[1]):
 # compare to null accuracy rates; difference in accuracy:
 for i in range(len(LR_Scores)):
     print str(list(y_basic.mean())[i]) + '\t' + str(LR_Scores[i]) + \
-    '\t' + str(LR_Scores[i] - list(y_basic.mean())[i])
+    '\t' + str(LR_Scores[i] - null_rates_basic[i])
 
 # this blows even random forest out of the water on the basic data - interesting
 
@@ -462,7 +436,7 @@ for i in range(y_basic.shape[1]):
 # compare to null accuracy rates; difference in accuracy:
 for i in range(len(SVM_Scores)):
     print str(list(y_basic.mean())[i]) + '\t' + str(SVM_Scores[i]) + \
-    '\t' + str(SVM_Scores[i] - list(y_basic.mean())[i])
+    '\t' + str(SVM_Scores[i] - null_rates_basic[i])
 
 
 ## COMPARISON NOTES VS COMPLEX DATA
