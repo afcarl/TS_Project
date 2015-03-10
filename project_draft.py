@@ -157,7 +157,9 @@ if i % <number of trading mins per day - slice_length*days> == 0:
 else:
     (do the loop activity already described below)
 
-This would only work if you are starting at the first minute of a day.  Alternatively to this "if" condition, could check the DTI to see what time it is and calc from there; might be better.
+This would only work if you are starting at the first minute of a day.
+
+Alternatively to this "if" condition, could check the DTI to see what time it is and calc from there; might be better (would be better).
 
 ===================
 Another thing TODO:
@@ -177,7 +179,14 @@ days = 1
 # instantiate DTI for the graph data (to join on clean)
 graph_dti = pd.DatetimeIndex()
 
-# main image processing loop:
+# splitting the loop in two -- graph-making half (try to fine-tune this a bit):
+for i in range(len(raw_data) - slice_length):
+    clean[['CLOSE', 'HIGH', 'LOW', 'OPEN']][i:i+slice_length].plot(legend=False)
+    plt.axis('off')
+    plt.savefig('graphics/' + str(i + slice_length) + '.png', dpi=25)
+    plt.close('all')
+
+# main image processing loop: (ORIGINAL VERSION - SPLITTING THIS UP)
 for i in range(len(raw_data) - slice_length):
     # plot the length of the time slice
         # various matplotlib code goes here -- NB no need to actually plot the figure onscreen
@@ -265,6 +274,10 @@ TODO:
 Classifier instances to try, w/rationale:
 =========================================
 
+Processing to try:
+- Lasso
+- Ridge regression
+
 AdaBoost
 ========
 Seems like the pixel data is a good candidate for weak learning, since it is generated via CV and deliberately includes multiple graphed lines per image (hard to determine a priori which predictors might be best to ignore / best to boost)
@@ -320,6 +333,7 @@ RMAX_CLOSE = pd.rolling_max(clean.CLOSE, slice_length)
 HL_SQD = Series([(clean.iloc[row][1] - clean.iloc[row][2]) ** 2 for row in range(len(clean))], index=clean.index)
 
 ## Add others if I think of something clever
+# binary variables based on some T/F condition vs. a lookback, maybe ?
 
 # inner join of the above-created Series on the "clean" DF; drop rows with NaN values
 X_basic = clean.join([RM_CLOSE, RSTD_CLOSE, RMIN_CLOSE, RMAX_CLOSE, HL_SQD], how='inner')
@@ -340,6 +354,7 @@ X_basic = X_basic[:-60]
 # create Train and Test sets MANUALLY
 # cannot use randomization, else cheating by "looking into the future"
 # however, CAN use pd.rolling_apply or similar to create "rolling" CV folds -- look into this
+# see if it is possible to use Pipeline for this... not sure
 
 # define 70% cutoff point manually
 train_inds = int((0.7 * len(X_basic))//1)
@@ -450,6 +465,7 @@ Notes for model improvement:
 - On graphical data, remove any empty columns (may exist due to image margins)
 - Try different tuning parameters for slice_length
 - think more about prior time data -- weighting factor for historical data, inclusion of prior preds as features in current observation (possibly also weighted)
+- think about using GridSearchCV to tune parameters (and double-check that tuning was worthwhile using a non-cheating method) -- could use these as "optimized defaults" to be periodically reevaluated in the future
 '''
 
 
