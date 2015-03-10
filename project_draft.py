@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import datetime
+import os
+import gc
 import cv2
 
 '''
@@ -172,6 +174,22 @@ graph_dti = pd.DatetimeIndex() (outside loop)
 graph_dti.append(clean.ix[i])   # I'm sure this isn't correct, seems too easy
 
 '''
+
+# splitting the loop in two -- graph-making half (try to fine-tune this a bit):
+for i in range(len(raw_data) - slice_length):
+    if os.path.isfile('graphics/' + str(i + slice_length) + '.png') == False:
+        clean[['CLOSE', 'HIGH', 'LOW', 'OPEN']][i:i+slice_length].plot(legend=False)
+        plt.axis('off')
+        plt.savefig('graphics/' + str(i + slice_length) + '.png', dpi=25)
+        plt.close('all')
+        if i % 25 == 0:
+            print 'Still processing: i = ' + str(i) + ' and time is ' + time.ctime()
+            gc.collect()
+    else:
+        pass
+
+## Redo cv2 loop below.  Be VERY CAREFUL to align data properly... don't be off by one.
+
 # instantiate a list container for unrolled pixel data
 graph_data = []
 # instantiate days counter (if using the logic described above)
@@ -179,24 +197,17 @@ days = 1
 # instantiate DTI for the graph data (to join on clean)
 graph_dti = pd.DatetimeIndex()
 
-# splitting the loop in two -- graph-making half (try to fine-tune this a bit):
-for i in range(len(raw_data) - slice_length):
-    clean[['CLOSE', 'HIGH', 'LOW', 'OPEN']][i:i+slice_length].plot(legend=False)
-    plt.axis('off')
-    plt.savefig('graphics/' + str(i + slice_length) + '.png', dpi=25)
-    plt.close('all')
-
 # main image processing loop: (ORIGINAL VERSION - SPLITTING THIS UP)
 for i in range(len(raw_data) - slice_length):
-    # plot the length of the time slice
-        # various matplotlib code goes here -- NB no need to actually plot the figure onscreen
-        # below is example code -- need better params to make it as clean a visual as possible
-        clean[['CLOSE', 'HIGH', 'LOW', 'OPEN']][i:i+slice_length].plot(legend=False)
-
-    # save the graph image to disk
-        plt.axis('off')
-        plt.savefig('graphics/obs_graph.png', dpi=25) # transparency doesn't seem to help w/grayscale values
-        plt.close('all')
+#    # plot the length of the time slice
+#        # various matplotlib code goes here -- NB no need to actually plot the figure onscreen
+#        # below is example code -- need better params to make it as clean a visual as possible
+#        clean[['CLOSE', 'HIGH', 'LOW', 'OPEN']][i:i+slice_length].plot(legend=False)
+#
+#    # save the graph image to disk
+#        plt.axis('off')
+#        plt.savefig('graphics/obs_graph.png', dpi=25) # transparency doesn't seem to help w/grayscale values
+#        plt.close('all')
 
     # load in pixel data using cv2
         gs_img_data = cv2.imread('graphics/obs_graph.png', cv2.IMREAD_GRAYSCALE)
