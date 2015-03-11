@@ -39,7 +39,7 @@ discount_wgt:   a factor by which to downweight prior_slices data
 mins_ahead:     how many minutes ahead to set known targets for each observation
                 to train against (algos may do better at certain times ahead)
 
-                try: 1, 2, 3 to start; maybe 5, 10, 15, 30, 60 will yeild better results
+                try: 1, 2, 3 to start; maybe 5, 10, 15, 30, 60 will yield better results
 
 '''
 
@@ -130,38 +130,14 @@ https://www.dropbox.com/s/2m5pp7gtev36jrd/gdata_pickle?dl=0
 
 '''
 
-# create a dict to reverse the pixel values captured in an image so that grayscale
-# actually produces sparsity instead of a bunch of 255 values
-rng = np.arange(256)
-revd = rng[::-1]
-px_dict = dict(zip(rng,revd))
-
-# mapping function to remap pixel values using the above-created dict
-def dict_map(item):
-    global px_dict
-    return px_dict[item]
 
 '''
 TODO:
 
 Fix this loop.  Currently it doesn't know when it is hitting the end of a day, and is just wrapping around across days (not desired behavior for graphs, though probably not the worst thing in the world since it is at least "contiguous across trading hours")
 
-Can add a day counter and logic fork (double check this math...)
 
-days = 1 (outside loop)
-
-# if about to exceed end of trading day:
-if i % <number of trading mins per day - slice_length*days> == 0:
-    # move ahead to start of next day
-    i = i + slice_length
-    # increment days counter
-    days = days + 1
-else:
-    (do the loop activity already described below)
-
-This would only work if you are starting at the first minute of a day.
-
-Alternatively to this "if" condition, could check the DTI to see what time it is and calc from there; might be better (would be better).
+Check the DTI to see what time it is and drop invalid times (where wrapping).
 
 ===================
 Another thing TODO:
@@ -190,35 +166,65 @@ for i in range(len(raw_data) - slice_length):
 
 ## Redo cv2 loop below.  Be VERY CAREFUL to align data properly... don't be off by one.
 
+# create a dict to reverse the pixel values captured in an image so that grayscale
+# actually produces sparsity instead of a bunch of 255 values
+rng = np.arange(256)
+revd = rng[::-1]
+px_dict = dict(zip(rng,revd))
+
+# mapping function to remap pixel values using the above-created dict
+def dict_map(item):
+    global px_dict
+    return px_dict[item]
+
 # instantiate a list container for unrolled pixel data
 graph_data = []
-# instantiate days counter (if using the logic described above)
-days = 1
 # instantiate DTI for the graph data (to join on clean)
-graph_dti = pd.DatetimeIndex()
+graph_dti = clean.index[4:-1]   # image generation loop missed the last minute somehow
 
-# main image processing loop: (ORIGINAL VERSION - SPLITTING THIS UP)
+
+# image processing loop -- cv2 half:
 for i in range(len(raw_data) - slice_length):
-#    # plot the length of the time slice
-#        # various matplotlib code goes here -- NB no need to actually plot the figure onscreen
-#        # below is example code -- need better params to make it as clean a visual as possible
-#        clean[['CLOSE', 'HIGH', 'LOW', 'OPEN']][i:i+slice_length].plot(legend=False)
-#
-#    # save the graph image to disk
-#        plt.axis('off')
-#        plt.savefig('graphics/obs_graph.png', dpi=25) # transparency doesn't seem to help w/grayscale values
-#        plt.close('all')
+    path = 'graphics/' + str(i + slice_length) + '.png'
+    gs_img_data = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    unrolled = []
+    for row in range(gs_img_data.shape[0]):
+        unrolled = unrolled + map(dict_map, list(gs_img_data[row,:]))
+    graph_data.append(unrolled)
+    if i % 100 == 0:
+        print 'Still processing: i = ' + str(i) + ' and time is ' + time.ctime()
+        gc.collect()
 
-    # load in pixel data using cv2
-        gs_img_data = cv2.imread('graphics/obs_graph.png', cv2.IMREAD_GRAYSCALE)
+gdata = DataFrame(data=graph_data, index=graph_dti)
 
-    # access pixel values and unroll
-        unrolled = []
-        for row in range(gs_img_data.shape[0]):
-            unrolled = unrolled + map(dict_map, list(gs_img_data[row,:]))
 
-    # append the unrolled row of pixel observations to the graph_data object (TBD... DataFrame, memmap, list?)
-        graph_data.append(unrolled)
+# #smarter way, unless this is screwing up iloc on each iteration...:
+# for i in range(gdata.shape[1]):
+#     if any(gdata.iloc[:,i] > 0):
+#         pass
+#     elif gdata.iloc[:,i].sum() == 0:  # if this pixel data col is empty
+#         gdata.drop(gdata.columns[i], axis=1)
+#         print 'Dropped column ' + str(i) + ' at ' + time.ctime()
+#     else:
+#         print 'something went horribly wrong'
+
+# even smarter way: run this once (if it is working properly) and simply capture which cols are empty, then drop all at once
+# this should avoid the shifting iloc problem above :\
+to_drop = []
+for i in range(gdata.shape[1]):
+    if any(gdata.iloc[:,i] > 0):
+        pass
+    else:
+        to_drop.append(i)
+gdata.drop(gdata.columns[to_drop])
+
+for i in range(len(to_drop)):
+    gdata.drop(gdata.columns[to_drop[i]], axis=1, inplace=True)
+    if i % 25 == 0:
+        print 'i = ' + str(i) + ' at ' + time.ctime()
+
+gdata.info()    # check what it looks like size-wise afterwards
+gdata.shape     # check dims afterwards
 
 '''
 Things to try to improve this loop:
@@ -231,11 +237,6 @@ Things to try to improve this loop:
 # another thing to try: tweak dpi kwarg in plt.savefig() (have now tried this too)
 '''
 
-# pickling so that I don't have to run this again:
-gdata = DataFrame(graph_data)
-gdata.to_pickle('data/gdata_pickle')
-# reading pickle appears to be very slow for some reason
-gdata = pd.read_pickle('data/gdata_pickle') # moved out of git repo; check dir
 
 '''
 Index and join generated image data to clean financial data
@@ -248,13 +249,7 @@ so the DTI for gdata will be slice_length shorter than the one for clean data
 After getting correct DTI in place, inner join the two DFs on the index
 '''
 
-# this isn't working for some reason:
-# gdata_indexed = gdata.set_index(list(list(clean.index[:-5])))
-
-# alternative: add a new col to gdata of values from clean.index; join on col to index
-# also doesn't appear to be working right now; I'm assuming memory issues
-fake_idx = Series(list(clean.index[:-5]))
-test = pd.concat([gdata, fake_idx], axis = 1)
+test = clean.join(gdata, how='inner')
 
 '''
 Generate target data for model training
@@ -480,6 +475,9 @@ Notes for model improvement:
 '''
 
 
+
+
+
 '''
 Various cruft from earlier mucking about:
 =========================================
@@ -504,6 +502,34 @@ graph_data = np.memmap('graph_data', dtype='float64', mode='w+', \
 # trying to concat Series rather than lists; this now seems pointless:
 
 pd.concat([Series(unrolled), graph_data], axis=1)   # maybe not this one
+
+# main image processing loop: (ORIGINAL VERSION - SPLITTING THIS UP)
+for i in range(len(raw_data) - slice_length):
+   # plot the length of the time slice
+       # various matplotlib code goes here -- NB no need to actually plot the figure onscreen
+       # below is example code -- need better params to make it as clean a visual as possible
+       clean[['CLOSE', 'HIGH', 'LOW', 'OPEN']][i:i+slice_length].plot(legend=False)
+
+   # save the graph image to disk
+       plt.axis('off')
+       plt.savefig('graphics/obs_graph.png', dpi=25) # transparency doesn't seem to help w/grayscale values
+       plt.close('all')
+
+   # load in pixel data using cv2
+       gs_img_data = cv2.imread('graphics/obs_graph.png', cv2.IMREAD_GRAYSCALE)
+
+   # access pixel values and unroll
+       unrolled = []
+       for row in range(gs_img_data.shape[0]):
+           unrolled = unrolled + map(dict_map, list(gs_img_data[row,:]))
+
+   # append the unrolled row of pixel observations to the graph_data object (TBD... DataFrame, memmap, list?)
+       graph_data.append(unrolled)
+
+# pickling so that I don't have to run this again:
+gdata.to_pickle('data/gdata_pickle')
+# reading pickle appears to be very slow for some reason
+gdata = pd.read_pickle('data/gdata_pickle') # moved out of git repo; check dir
 
 
 '''
