@@ -128,26 +128,7 @@ from the output is available here (1.x GB):
 
 https://www.dropbox.com/s/2m5pp7gtev36jrd/gdata_pickle?dl=0
 
-'''
-
-
-'''
-TODO:
-
-Fix this loop.  Currently it doesn't know when it is hitting the end of a day, and is just wrapping around across days (not desired behavior for graphs, though probably not the worst thing in the world since it is at least "contiguous across trading hours")
-
-
-Check the DTI to see what time it is and drop invalid times (where wrapping).
-
-===================
-Another thing TODO:
-===================
-
-Try to generate the index AS the loop is running
-
-graph_dti = pd.DatetimeIndex() (outside loop)
-
-graph_dti.append(clean.ix[i])   # I'm sure this isn't correct, seems too easy
+[update notes here: describe the two individual loops for graphing / CV]
 
 '''
 
@@ -197,19 +178,7 @@ for i in range(len(raw_data) - slice_length):
 
 gdata = DataFrame(data=graph_data, index=graph_dti)
 
-
-# #smarter way, unless this is screwing up iloc on each iteration...:
-# for i in range(gdata.shape[1]):
-#     if any(gdata.iloc[:,i] > 0):
-#         pass
-#     elif gdata.iloc[:,i].sum() == 0:  # if this pixel data col is empty
-#         gdata.drop(gdata.columns[i], axis=1)
-#         print 'Dropped column ' + str(i) + ' at ' + time.ctime()
-#     else:
-#         print 'something went horribly wrong'
-
-# even smarter way: run this once (if it is working properly) and simply capture which cols are empty, then drop all at once
-# this should avoid the shifting iloc problem above :\
+# run this once (if it is working properly) and simply capture which cols are empty, then drop
 to_drop = []
 for i in range(gdata.shape[1]):
     if any(gdata.iloc[:,i] > 0):
@@ -225,26 +194,29 @@ for i in range(len(to_drop)):
 
 gdata.info()    # check what it looks like size-wise afterwards
 gdata.shape     # check dims afterwards
+gdata.to_pickle('../data/gdata_pickle')         # pickle it since drop loop took 4 hours
+gdata = pd.read_pickle('../data/gdata_pickle')  # moved out of git repo; check dir
 
 '''
-Things to try to improve this loop:
+TODO:
 
-# it is quite slow - one thing to look into, can I force it to store as sparse by
-# changing some values of the grayscale?  Could shift to binary (0 for 255, 1 for
-# everything else), or just "reverse" the scale (with a dict?) so that 255 maps to
-# 0 and things map to their reflection in the set (have now done this above)
+- Drop the invalid rows (based on time of day) from gdata
+- Rows for first 5 mins of every day beyond the first are invalid due to cross-day wrapping
 
-# another thing to try: tweak dpi kwarg in plt.savefig() (have now tried this too)
+This isn't worth the computational effort; delete invalid images and re-generate the gdata DF instead
+(or ignore this problem for now)
 '''
 
+invalid_times = ['09:31:00', '09:32:00', '09:33:00', '09:34:00']
+
+for i in range(len(gdata)):
+    if str(gdata.index[i])[-8:] in invalid_times:
+        print "Dropping row at index " + str(gdata.index[i]) + ' at ' + time.ctime()
+        gdata.drop(gdata.index[i], inplace=True)
 
 '''
 Index and join generated image data to clean financial data
 ===========================================================
-
-First need to generate a DatetimeIndex that matches the correct pixel rows
-(first row of gdata = slice_length'th row of clean data)
-so the DTI for gdata will be slice_length shorter than the one for clean data
 
 After getting correct DTI in place, inner join the two DFs on the index
 '''
@@ -312,14 +284,63 @@ Alternative classification approach for basic data; unlikely to work for graphic
 
 ## Null Accuracy Rates for comparison:
 null_rates = list(y.mean())
+X = gdata[:-60] # trim to account for max mins ahead target
+X = X.join(clean, how='inner')
+y = y[5:]       # trim to account for nonexistent starting entries of graphical data
+
+# define 70% cutoff point for train/test split manually
+train_inds = int((0.7 * len(X))//1)
+
+#split into train / test sets
+X_train = X.iloc[:train_inds, :]
+y_train = y.iloc[:train_inds, :]
+X_test = X.iloc[train_inds:, :]
+y_test = y.iloc[train_inds:, :]
+
 
 # AdaBoost
+for i in range(y.shape[1]):
+    from sklearn.ensemble import AdaBoostClassifier
+    adb = AdaBoostClassifier(n_estimators = 100)
+    adb.fit(X_train, y_train.iloc[:,i])
+    ADB_Scores[i] = adb.score(X_test, y_test.iloc[:,i])
+
+# compare to null accuracy rates; difference in accuracy:
+for i in range(len(ADB_Scores)):
+    print str(list(y_basic.mean())[i]) + '\t' + str(ADB_Scores[i]) + \
+    '\t' + str(ADB_Scores[i] - null_rates_basic[i])
+
 
 # Random Forest
 
 # Naive Bayes
+NB_Scores = list(np.zeros(y.shape[1]))
+
+for i in range(y.shape[1]):
+    from sklearn.naive_bayes import GaussianNB
+    nb = GaussianNB()
+    nb.fit(X_train, y_train.iloc[:,i])
+    NB_Scores[i] = nb.score(X_test, y_test.iloc[:,i])
+
+# compare to null accuracy rates; difference in accuracy:
+for i in range(len(NB_Scores)):
+    print str(list(y_basic.mean())[i]) + '\t' + str(NB_Scores[i]) + \
+    '\t' + str(NB_Scores[i] - null_rates_basic[i])
 
 # Logistic Regression
+LR_Scores = list(np.zeros(y_basic.shape[1]))
+
+for i in range(y.shape[1]):
+    from sklearn.linear_model import LogisticRegression
+    lr = LogisticRegression()
+    lr.fit(X_train, y_train.iloc[:,i])
+    LR_Scores[i] = lr.score(X_test, y_test.iloc[:,i])
+
+# compare to null accuracy rates; difference in accuracy:
+for i in range(len(LR_Scores)):
+    print str(list(y_basic.mean())[i]) + '\t' + str(LR_Scores[i]) + \
+    '\t' + str(LR_Scores[i] - null_rates_basic[i])
+
 
 ## COMPARISON TO EACH OTHER
 
@@ -525,11 +546,5 @@ for i in range(len(raw_data) - slice_length):
 
    # append the unrolled row of pixel observations to the graph_data object (TBD... DataFrame, memmap, list?)
        graph_data.append(unrolled)
-
-# pickling so that I don't have to run this again:
-gdata.to_pickle('data/gdata_pickle')
-# reading pickle appears to be very slow for some reason
-gdata = pd.read_pickle('data/gdata_pickle') # moved out of git repo; check dir
-
 
 '''
