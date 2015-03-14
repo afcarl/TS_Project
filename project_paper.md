@@ -1,6 +1,7 @@
 ## Machine Technical Analysis
 #### Data Science, General Assembly
-#### Alex Lee, 3/13/2015
+**Alex Lee
+3/13/2015**
 
 **Note to readers:** companion code for this paper is available in the GitHub repository where it is hosted.
 
@@ -14,7 +15,7 @@ This paper charts the progress of attempts to answer this question, including me
 
 ### Data Sourcing and Description
 
-Data for this project were obtained from a Google Finance web-based API that provides up to 20 days' worth of historical price data at the minute-tick level, for any ticker that Google Finance has data for.  Data are given for the open, high, low, and close price for each tick (representing the respective prices during that 1-minute interval, in the case of the data I used); data are also available for volume for certain tickers (not indices such as SPX which I used for my modeling, though).
+Data for this project were obtained from a Google Finance web-based API that provides up to 20 days' worth of historical price data at the minute-tick level, for any ticker that Google Finance has data for.  Data are given for the open, high, low, and closing (OHLC) prices for each tick (representing the respective prices during that 1-minute interval, in the case of the data I used); data are also available for volume for certain tickers (not indices such as SPX which I used for my modeling, though).
 
 **Note:** More detailed descriptions of the individual data features are available in the data_dictionary.md file located in the same GitHub repository as this document.
 
@@ -26,13 +27,17 @@ Data exploration was relatively simple for my purposes, as the primary "feature"
 
 ### Feature Creation
 
-this was the most arduous part - describe final implementation of 2 loops (graphing, image processing)
+From the basic OHLC price data, a number of additional features were calculated for use in a non-graphical "base case" model.  These included rolling mean, standard deviation, minimum, and maximum across a window which was defined to be the same as the time slice length used to generate the graphical features.  In addition to these rolling features, I calculated the squared difference between the high and the low prices for each observation, to capture some measure of relative volatility in the price data over time.
+
+Creating features from the cleaned price data for use in graphical approaches was one of the most difficult parts of the overall analytic process.  The general conceptual pipeline that I built out was to graph rolling time slices of prices in a "clean" format (e.g. no axis labels, tick marks, titles, etc., just the pure price lines over that window) for all four OHLC prices, then to read back a grayscale version of the saved graph image as a matrix of pixel intensities (which was then unrolled, row by row, to create a vector of pixel features for each observation, or point in time).  
+
+This resulted in a much larger dataset -- graphing each time slice as a 150x200 pixel image, each observation went from having 4 features (OHLC prices) to having 30,000 (one for each pixel of the image).  
 
 ### Modeling and Rationale
 
-This section is divided into two sections etc. etc.
+Models were divided into two broad categories, described in more detail below: as a baseline, the OHLC price data along with additional features described above were fed into a set of standard and ensemble classifiers.  The graphical data were fed into some of these same classifiers, as well as alternative models.
 
-#### Basic Modeling
+#### Classification Modeling on Simple OHLC Price Data
 
 Pretty good results for some of these actually
 
@@ -45,6 +50,7 @@ TBD based on ANN / PyBrain modeling.  Non-ANN models for processing pixel data p
 - Feature creation was a huge pain
 - Forgetting about ANN
 - Trying to implement ANN
+- Using image recognition libraries
 
 ### Looking Forward: Future Expansions and Applications
 
@@ -52,4 +58,4 @@ Definitely still think this has promise; productionizing certain parts of it wou
 
 ### Conclusion: Key Learnings
 
-I need a better computer.  Also real conclusions go here.
+I need a better computer.  This was good practice learning to integrate lots of libraries into analysis.  Also real conclusions go here.
