@@ -12,6 +12,7 @@ import time
 import datetime
 import os
 import gc
+import shutil
 import cv2
 
 '''
@@ -248,6 +249,48 @@ TODO:
 '''
 
 
+###################################
+# Image Recognition with SimpleCV #
+###################################
+
+
+# copy 70% of everything with a 1 in ahead_5 target to supervised/up5, 0 to supervised/down5
+# copy 30% of everything with a 1 in ahead_5 target to unsupervised/up5, 0 to unsupervised/down5
+
+up_5s = sum(y['5_ahead'])
+dn_5s = len(y) - up_5s
+cutoff_up = int((0.7 * up_5s)//1)
+cutoff_dn = int((0.7 * dn_5s)//1)
+train_up_path = '../data/supervised/up5/'
+train_dn_path = '../data/supervised/down5/'
+test_up_path = '../data/unsupervised/up5/'
+test_dn_path = '../data/unsupervised/down5/'
+up_iter = 0
+dn_iter = 0
+
+# copy first 70% of each class to individual corresponding directory
+for i in range(len(y) - 5):
+    cur_file = 'graphics/' + str(i + 5) + '.png'
+    if y['5_ahead'][i] == 1:
+        if up_iter < cutoff_up:
+            shutil.copy(cur_file, train_up_path)
+        else:
+            shutil.copy(cur_file, test_up_path)
+        up_iter = up_iter + 1
+    else:
+        if dn_iter < cutoff_dn:
+            shutil.copy(cur_file, train_dn_path)
+        else:
+            shutil.copy(cur_file, test_dn_path)
+        dn_iter = dn_iter + 1
+
+# images are now ready for SimpleCV training and testing
+
+
+
+
+
+
 '''
 Classifier instances to try, w/rationale:
 =========================================
@@ -277,10 +320,6 @@ SVM
 Alternative classification approach for basic data; unlikely to work for graphical data due to having more features than observations
 
 '''
-# this will be the part where I instantiate a few models in sklearn
-# and then train them on the EARLIER 70% (say) of the dataset
-# cannot use regular train_test_split / CV because then the algos would be "cheating"
-# by having some future data in the training mix, even if it didn't know it was future data
 
 ## Null Accuracy Rates for comparison:
 null_rates = list(y.mean())
