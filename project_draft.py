@@ -487,9 +487,25 @@ HL_SQD = Series([(clean.iloc[row][1] - clean.iloc[row][2]) ** 2 for row in range
 ## Add others if I think of something clever
 # binary variables based on some T/F condition vs. a lookback, maybe ?
 
+# adding some graphical features
+# can ignore all code related to this for the "pure" X_basic analysis as originally run
+line_data = []
+imgs = SimpleCV.ImageSet('graphics/')
+lines = [x.findLines() for x in imgs]
+
+for x in lines:
+    coord1mean = np.mean([obs[0] for obs in x.coordinates()])
+    coord2mean = np.mean([obs[1] for obs in x.coordinates()])
+    line_data.append([np.mean(x.length()), np.mean(x.angle()), coord1mean, coord2mean])
+
+line_X = DataFrame(line_data, columns = ['mean_len', 'mean_angle', 'c1mean', 'c2mean'], index=clean.index[5:])
+
+
 # inner join of the above-created Series on the "clean" DF; drop rows with NaN values
 X_basic = clean.join([RM_CLOSE, RSTD_CLOSE, RMIN_CLOSE, RMAX_CLOSE, HL_SQD], how='inner')
 X_basic = X_basic.dropna()
+X_basic = X_basic.join(line_X, how='inner')
+del(X_basic['VOLUME'])
 
 # create y_basic based on this new dataframe
 ahead_basic = []
@@ -498,10 +514,15 @@ for i in range(len(X_basic) - max(mins_ahead)):
     current_row = [1 if X_basic.iloc[i+mins_ahead[j],0] > clean.iloc[i,0] else 0 for j in range(len(mins_ahead))]
     ahead_basic.append(current_row)
 
-y_basic = DataFrame(ahead_basic, columns = [str(mins_ahead[i]) + '_ahead' for i in range(len(mins_ahead))])
+y_basic = DataFrame(ahead_basic, columns = [str(mins_ahead[i]) + '_ahead' for i in range(len(mins_ahead))], index=X_basic.index[:-60])
 
 # trim down X_basic to match y_basic's reduced length
 X_basic = X_basic[:-60]
+
+# drop the NA rows where no graph data
+X_basic.dropna(inplace=True)
+# subset y_basic on new index
+y_basic = y_basic.ix[X_basic.index]
 
 # create Train and Test sets MANUALLY
 # cannot use randomization, else cheating by "looking into the future"
