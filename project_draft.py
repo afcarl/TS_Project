@@ -290,24 +290,46 @@ for i in range(len(y) - 5):
 # try findLines() or findEdges()
 
 up5_imgs = SimpleCV.ImageSet('../data/supervised/up5')
-up5_blobs = [x.findBlobs()[0] for x in up5_imgs]
+#up5_blobs = [x.findBlobs()[0] for x in up5_imgs]
+up5_lines = [x.findLines() for x in up5_imgs]
 dn5_imgs = SimpleCV.ImageSet('../data/supervised/down5')
-dn5_blobs = [x.findBlobs()[0] for x in dn5_imgs]
+#dn5_blobs = [x.findBlobs()[0] for x in dn5_imgs]
+dn5_lines = [x.findLines() for x in dn5_imgs]
 temp_data = []
 temp_targets = []
 target_names = ["Down", "Up"]
 
-for x in up5_blobs:
-    temp_data.append([x.area(), x.height(), x.width()])
+# for x in up5_blobs:
+#     temp_data.append([x.area(), x.height(), x.width()])
+#     temp_targets.append(1)
+
+for x in up5_lines:
+    coord1mean = np.mean([obs[0] for obs in x.coordinates()])
+    coord2mean = np.mean([obs[1] for obs in x.coordinates()])
+    temp_data.append([np.mean(x.length()), np.mean(x.angle()), coord1mean, coord2mean])
     temp_targets.append(1)
 
-for x in dn5_blobs:
-    temp_data.append([x.area(), x.height(), x.width()])
+# for x in dn5_blobs:
+#     temp_data.append([x.area(), x.height(), x.width()])
+#     temp_targets.append(0)
+
+for x in dn5_lines:
+    coord1mean = np.mean([obs[0] for obs in x.coordinates()])
+    coord2mean = np.mean([obs[1] for obs in x.coordinates()])
+    temp_data.append([np.mean(x.length()), np.mean(x.angle()), coord1mean, coord2mean])
     temp_targets.append(0)
 
+# cleanup and properly index
 X = np.array(temp_data)
 y = np.array(temp_targets)
 
+X = DataFrame(X, columns = ['mean_len', 'mean_angle', 'c1mean', 'c2mean'])
+y = Series(y, name=['target'])
+
+X.dropna(inplace=True)
+y = y.ix[X.index]
+
+# ready to train
 from sklearn.svm import LinearSVC
 from sklearn.linear_model import LogisticRegression
 
@@ -317,16 +339,42 @@ clf2 = LogisticRegression()
 clf2.fit(X, y)
 
 up5_test = SimpleCV.ImageSet('../data/unsupervised/up5')
-up5_test_blobs = [x.findBlobs()[0] for x in up5_test]
+#up5_test_blobs = [x.findBlobs()[0] for x in up5_test]
+up5_test_lines = [x.findLines() for x in up5_test]
 dn5_test = SimpleCV.ImageSet('../data/unsupervised/down5')
-dn5_test_blobs = [x.invert().findBlobs()[0] for x in dn5_test]
+#dn5_test_blobs = [x.invert().findBlobs()[0] for x in dn5_test]
+dn5_test_lines = [x.findLines() for x in dn5_test]
 
+to_predict_up = []
+to_predict_dn = []
 
-clf_up_preds = []
+for x in up5_test_lines:
+    coord1mean = np.mean([obs[0] for obs in x.coordinates()])
+    coord2mean = np.mean([obs[1] for obs in x.coordinates()])
+    grph = [np.mean(x.length()), np.mean(x.angle()), coord1mean, coord2mean]
+    to_predict_up.append(grph)
 
-for x in up5_test_blobs:
-    grph = [x.area(), x.height(), x.width()]
-    clf_up_preds.append(clf.predict(grph)[0])
+to_predict_up = DataFrame(to_predict_up, columns = ['mean_len', 'mean_angle', 'c1mean', 'c2mean']).dropna()
+
+up_preds_clf = clf.predict(to_predict_up)
+up_preds_clf2 = clf2.predict(to_predict_up)
+
+for x in dn5_test_lines:
+    coord1mean = np.mean([obs[0] for obs in x.coordinates()])
+    coord2mean = np.mean([obs[1] for obs in x.coordinates()])
+    grph = [np.mean(x.length()), np.mean(x.angle()), coord1mean, coord2mean]
+    to_predict_dn.append(grph)
+
+to_predict_dn = DataFrame(to_predict_dn, columns = ['mean_len', 'mean_angle', \
+    'c1mean', 'c2mean']).dropna()
+
+dn_preds_clf = clf.predict(to_predict_dn)
+dn_preds_clf2 = clf2.predict(to_predict_dn)
+
+# good at predicting on up, not so good at predicting on down -- interesting
+# normally I'd say this reflects upward bias in stock prices, but the time scales
+# are so small that it doesn't make much sense here
+print 'SVM on up data: ' + str(np.mean(up_preds_clf)) + '\n' + 'LR on up data: ' + str(np.mean(up_preds_clf2)) + '\n' + 'SVM on down data: ' + str(np.mean(dn_preds_clf)) + '\n' + 'LR on down data: ' + str(np.mean(dn_preds_clf2))
 
 
 '''
