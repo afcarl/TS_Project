@@ -14,6 +14,7 @@ import os
 import gc
 import shutil
 import cv2
+import SimpleCV
 
 '''
 Declare some global variables:
@@ -285,10 +286,47 @@ for i in range(len(y) - 5):
         dn_iter = dn_iter + 1
 
 # images are now ready for SimpleCV training and testing
+# this blobs example does nothing useful; wrong sort of thing for our graphs
+# try findLines() or findEdges()
+
+up5_imgs = SimpleCV.ImageSet('../data/supervised/up5')
+up5_blobs = [x.findBlobs()[0] for x in up5_imgs]
+dn5_imgs = SimpleCV.ImageSet('../data/supervised/down5')
+dn5_blobs = [x.findBlobs()[0] for x in dn5_imgs]
+temp_data = []
+temp_targets = []
+target_names = ["Down", "Up"]
+
+for x in up5_blobs:
+    temp_data.append([x.area(), x.height(), x.width()])
+    temp_targets.append(1)
+
+for x in dn5_blobs:
+    temp_data.append([x.area(), x.height(), x.width()])
+    temp_targets.append(0)
+
+X = np.array(temp_data)
+y = np.array(temp_targets)
+
+from sklearn.svm import LinearSVC
+from sklearn.linear_model import LogisticRegression
+
+clf = LinearSVC()
+clf.fit(X, y)
+clf2 = LogisticRegression()
+clf2.fit(X, y)
+
+up5_test = SimpleCV.ImageSet('../data/unsupervised/up5')
+up5_test_blobs = [x.findBlobs()[0] for x in up5_test]
+dn5_test = SimpleCV.ImageSet('../data/unsupervised/down5')
+dn5_test_blobs = [x.invert().findBlobs()[0] for x in dn5_test]
 
 
+clf_up_preds = []
 
-
+for x in up5_test_blobs:
+    grph = [x.area(), x.height(), x.width()]
+    clf_up_preds.append(clf.predict(grph)[0])
 
 
 '''
