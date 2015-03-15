@@ -2,8 +2,6 @@
 
 Please see below for a description of the features used in this analysis.
 
-DON'T FORGET UNITS.
-
 ### Global Variables
 
 - slice_length:     A window of time in minutes.  Used in calculating or generating rolling features.
@@ -27,7 +25,15 @@ DON'T FORGET UNITS.
 
 ### Graphical Variables
 
-Each graphical feature is the pixel intensity value (on an inverted scale) as read from the corresponding PNG image of a graph of the trailing slice_length minutes of price data (OHLC).
+#### SimpleCV Variables
+
+- mean_len:     Average length (in pixels) of lines detected in the image (observation).
+- mean_angle:   Average angle (in degrees) of lines detected in the image.
+- c1mean:       Average x-coordinate (in pixels) of lines located in the image.
+- c2mean:       Average y-coordinate (in pixels) of lines located in the image.
+
+#### Pixel Data Variables
+Each graphical feature is the pixel intensity value (on an inverted 256-bit scale) as read from the corresponding PNG image of a graph of the trailing slice_length minutes of price data (OHLC).
 
 The pixel values have been unrolled row-wise for each image and concatenated to form a full set of features per observation.
 
