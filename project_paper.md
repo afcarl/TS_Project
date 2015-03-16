@@ -31,15 +31,17 @@ Data exploration was relatively simple for my purposes, as the primary "feature"
 
 From the basic OHLC price data, a number of additional features were calculated for use in a non-graphical "base case" model.  These included rolling mean, standard deviation, minimum, and maximum across a window which was defined to be the same as the time slice length used to generate the graphical features.  In addition to these rolling features, I calculated the squared difference between the high and the low prices for each observation, to capture some measure of relative volatility in the price data over time.
 
-Creating features from the cleaned price data for use in graphical approaches was one of the most difficult parts of the overall analytic process.  The general conceptual pipeline that I built out was to graph rolling time slices of prices in a "clean" format (e.g. no axis labels, tick marks, titles, etc., just the pure price lines over that window) for all four OHLC prices, then to read back a grayscale version of the saved graph image as a matrix of pixel intensities (which was then unrolled, row by row, to create a vector of pixel features for each observation, or point in time).  
+Creating features from the cleaned price data for use in graphical approaches was one of the most difficult parts of the overall analytic process.  The general conceptual pipeline that I built out was to graph rolling time slices of prices in a "clean" format (e.g. no axis labels, tick marks, titles, etc., just the pure price lines over that window) for all four OHLC prices, save the image, then to read back a grayscale version of the saved graph image as a matrix of pixel intensities (which was then unrolled, row by row, to create a vector of pixel features for each observation, or point in time).  
 
 This resulted in a much larger dataset -- graphing each time slice as a 150x200 pixel image, each observation went from having 4 features (OHLC prices) to having 30,000 (one for each pixel of the image).
+
+For feature extraction for image recognition, due to constraints imposed by the library I was using (SimpleCV), I also had to segment the created graphs into distinct directories for binary classes, train and test sets.  From these graphs I was then able to extract features based on length, angle, and position of lines detected in my graphs to build a dataset for predictive modeling.
 
 Target data (used for both the basic data as well as the graphical data) were generated from the basic OHLC price data in a simple binary format.  For a specified number of minutes ahead, a target variable was set to 1 if the closing price at that time was higher than the closing price for the current observation, and 0 otherwise.  This was repeated across a range of forward-looking targets to assess performance of models across different time horizons.
 
 ### Modeling and Rationale
 
-Models were divided into two broad categories, described in more detail below: as a baseline, the OHLC price data along with additional features described above were fed into a set of standard and ensemble classifiers.  The graphical data were fed into some of these same classifiers, as well as alternative models.  All models were trained on a split of the data that occurred entirely before the test data, so as not to unfairly gain information about the future during the training phase.
+Models were divided into two broad categories, described in more detail below: as a baseline, the OHLC price data along with additional features described above were fed into a set of standard and ensemble classifiers.  The graphical data were fed into some of these same classifiers, as well as alternative models for image recognition.  All models were trained on a split of the data that occurred entirely before the test data, so as not to unfairly gain information about the future during the training phase.
 
 #### Classification Modeling on Simple OHLC Price Data
 
@@ -91,21 +93,46 @@ Overall, the model performance falling off past the short-lookahead marks makes 
 
 In addition, the relative under-performance of the ensemble models may be explained by the general uniformity of the dataset, as well as possible greater need to finely tune those models.  All data points for the modeling described above were ultimately related to just one variable: price.  As such, it perhaps should not be surprising that a logistic regression model gave the overall best performance.
 
-#### CV Modeling
+#### Image Data Modeling
 
-TBD based on ANN / PyBrain modeling.  Non-ANN models for processing pixel data performed poorly, even models like NB which I expected would perform better.
+Image data was used for two types of modeling applications: one used features extracted by computer vision software from the graph images created during the data processing phase, and the other used the raw pixel data as features themselves.
+
+**Extracted Features Modeling:**
+
+For image recognition using graphical feature extraction, the SimpleCV library was used to detect lines in the data for 5-minute time slices, and features of those lines were modeled for predicting price movement 5 minutes into the future.  The features extracted and used were average line length, average line angle, and average x- and y-coordinates of the detected lines.  These features were fed into two models, a Support Vector Machine and a Logistic Regression model, and then tested.
+
+**SVM:** The SVM model correctly predicted about 78% of the "up" target data that it was fed after training.  However, it only correctly classified about 22% of the "down" target data.
+
+**Logistic Regression:** The Logistic Regression model correctly predicted about 77% of the "up" target data, and only about 20% of the "down" target data.   I
+
+I am not sure of the reason for this discrepancy between predictive accuracy for "up" cases as opposed to "down" in the context of these models, as they were trained on a combination of both data.  I also find it hard to attribute it to "general upward bias" in the stock market -- on a long time horizon this may indeed be a factor, but for the target data that these models were trained on, only 49% of the targets were "up".
+
+This linear feature data was added to the simple OHLC price data and the models in the prior section were re-run, but adding these features directly to the model did not improve performance.  However, given that both classes of models "work well enough", they could be more usefully ensembled together by a mechanism such as majority vote.
+
+**Raw Pixel Data Modeling:**
+
+For the raw pixel data, AdaBoost, Naive Bayes, and Logistic Regression models were trained on the data.  None of these, however, yielded any useful results -- with 30,000 features, I expect that no single feature was ever significant enough to yield a decent prediction, so even a boosted method like AdaBoost was unable to pick up much signal.  
+
+One class of model that may yield somewhat better results is the Artificial Neural Network, which was not tested on these data for lack of time (and for lack of an ANN model in scikit-learn to try easily) -- however, the nature of the ANN algorithm suggests to me that it may learn usable features from these pixel data in a way that other models tested could not.  This is something that I would like to test in the future, but for the time being, the raw pixel data has been something of a blind alley.
 
 ### Challenges and Successes
 
-- Feature creation was a huge pain
-- Forgetting about ANN
-- Trying to implement ANN
-- Using image recognition libraries
+This project proved challenging for a number of reasons.  Graphical feature creation was rather arduous, and involved more Python programming than data analysis per se (though this was a very useful learning experience).  In addition, processing some of the graphical data was difficult on my old personal computer hardware.  The raw pixel dataset was over 100 million data points, and nearly a gigabyte in memory, so I think it was pushing the limit of what one could reasonably do on a home laptop.  Some of the processing loops took hours to run (though they only needed to be run once to create the graphics and dataframes that I was using), but this hindered the analytic process somewhat.
+
+Using image recognition and extracted feature modeling was also difficult, as it was not a topic covered in class and I had to learn it all very quickly, as I discovered SimpleCV quite late in the process of this project.  Figuring out what types of features to try to extract from the images was difficult, as the documentation was not as robust as that of, say, scikit-learn.  In addition, some types of features that looked as though they might be useful (Haar-type features, for instance), required building one's own Haar cascade from training data, and while I had the "raw material" (processed image files) for that, there was no package that I could find for doing so without great difficulty.
+
+The primary successes that I had with this project were two-fold: one was in learning how to productionize certain parts of my analytic pipeline for easy re-training and re-use of data and models, which helped in quickly obtaining results on my more basic OHLC price data set.  The second success was in the performance of some of the models themselves: the best-performing among them offered 20-35 point gains in predictive accuracy over the null accuracy rate, which is, in my mind, too high to be ignored.  These models were not as tuned as they could have been, either, so I imagine that even higher performance is possible with these.
+
+Finally, I counted it as a major success that in the end, I was able to train CV-based models that did have rather good performance (for at least one predictive use case) -- as this was the original intent of the project, I was glad to have achieved something in that regard, even if the models did not outperform simpler ones based on non-graphical features.
 
 ### Looking Forward: Future Expansions and Applications
 
-Definitely still think this has promise; productionizing certain parts of it would be interesting and worthwhile (webscraping, functions to automate some of the preprocessing, batching out more robust graphing jobs, etc.)
+I believe that this idea of "machine technical analysis" still has promise, as I was only able to scratch the surface of what I had initially envisioned for these types of models.  Additional models, such as Artifical Neural Networks, may provide substantial benefit, as may things like custom Haar cascades based on the image set that I processed.  Ensembles of graphical and price-based models may also outperform what I have created here, and I think there is significant headroom for tuning many aspects of my data production and modeling processes.
+
+There is a clear business application for the results shown in this paper: if not an element of a fully-automated trading scheme, the information provided by the best-performing model could at least be used as a "cognitive augmentation" tool for human traders.  If a model can predict with 85% accuracy which side of a short-term trade it is best to be on, that would seem to be very valuable information that could help any trading operation.  Surely similar econometric models exist to provide this kind of information, but they may not have the flexibility or "data agnosticism" of a machine learning-based technique.  ML techniques such as the one demonstrated here are also very flexible across a variety of use cases: to suit different term trading strategies, models can be re-trained on different time slices of data, and/or different forward-looking targets, with relative ease.  I expect that sooner rather than later, financial firms will catch on to the power that the machine learning tool set has to offer their businesses.
 
 ### Conclusion: Key Learnings
 
-I need a better computer.  This was good practice learning to integrate lots of libraries into analysis.  Also real conclusions go here.
+I learned a great number of things while pursuing this project.  Many of these fell under the umbrella of general Python programming, how to re-use code effectively, how to effectively incorporate existing libraries into one's own code, how to optimize certain memory- and/or CPU-intensive operations.  I learned enough about computer vision to keep me interested in pursuing its applications to the types of data that I am interested in, and how to quickly build out machine learning model sets in scikit-learn, which will no doubt prove useful in a number of contexts.  
+
+The primary conclusion that I feel I can draw from this project is that, abstracting away details about exact model selection and tuning, feature optimization, etc., machine learning and predictive modeling absolutely have use in quantitative finance.  While I did not particularly suspect the contrary prior to starting this project, building something with my own hands that proves it to me beyond the shadow of a doubt was both satisfying and highly instructive.  There are many possibilities waiting to be uncovered in this space, and through what I have learned over the course of this project, I feel well-equipped to explore them.
