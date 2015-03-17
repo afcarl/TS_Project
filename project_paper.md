@@ -101,13 +101,11 @@ Image data was used for two types of modeling applications: one used features ex
 
 For image recognition using graphical feature extraction, the SimpleCV library was used to detect lines in the data for 5-minute time slices, and features of those lines were modeled for predicting price movement 5 minutes into the future.  The features extracted and used were average line length, average line angle, and average x- and y-coordinates of the detected lines.  These features were fed into two models, a Support Vector Machine and a Logistic Regression model, and then tested.
 
-**SVM:** The SVM model correctly predicted about 78% of the "up" target data that it was fed after training.  However, it only correctly classified about 22% of the "down" target data.
+**SVM:** The SVM model correctly predicted about 78% of the "up" target data that it was fed after training, and a similar percentage of the "down" target data.  This exceeded the performance of SVM on the base price data for a comparable target of 5 minutes.
 
-**Logistic Regression:** The Logistic Regression model correctly predicted about 77% of the "up" target data, and only about 20% of the "down" target data.   I
+**Logistic Regression:** The Logistic Regression model correctly predicted about 77% of the "up" target data, and about 80% of the "down" target data that were fed into it after training.  As was also the case for the CV-based SVM model, this outperformed the base price data Logistic Regression model for the same 5-minute target.
 
-I am not sure of the reason for this discrepancy between predictive accuracy for "up" cases as opposed to "down" in the context of these models, as they were trained on a combination of both up and down target data.  I also find it hard to attribute the discrepancy to "general upward bias" in the stock market -- on a long time horizon this may indeed be a factor, but for the target data that these models were trained on, only 49% of the targets were "up".
-
-As an additional test, these linear feature data were also combined with the simple OHLC price data, and the models in the prior section were re-run, but adding these features directly to those models did not improve performance.  However, given that both classes of models "work well enough" on their own, they could potentially be more usefully ensembled via a mechanism such as majority vote.
+As an additional test, these linear feature data were also combined with the simple OHLC price data, and the models in the prior section were re-run, but adding these features directly to those models did not improve performance.  However, given that both classes of models "work well enough" on their own, they could potentially be more usefully ensembled via a mechanism such as majority vote to produce actual performance gains.
 
 **Raw Pixel Data Modeling:**
 
