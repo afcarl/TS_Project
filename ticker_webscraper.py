@@ -20,10 +20,10 @@ def get_ticker(ticker):
     # request data & save to destfile; overwriting is not an issue as we always want latest
     urllib.urlretrieve(turl, dest + fname)
     # notify
-    print 'Fetched ' + ticker + ' data to file: ' + dest + ' at ' + now[11:19]
+    print('Fetched ' + ticker + ' data to file: ' + dest + ' at ' + now[11:19])
 
 
 # run loop periodically to fetch ticker data:
 for ticker in tickers:
     get_ticker(ticker)
-    time.sleep(2)
+    #time.sleep(2)
